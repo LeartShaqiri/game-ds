@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Catcher</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    background: #060613;
+    color: #e0e0ff;
+    overflow: hidden;
+    height: 100vh; width: 100vw;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #app { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
+  #starfield { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+  /* ── screens ── */
+  .screen {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 32px; padding: 40px;
+    width: 100%; max-width: 700px;
+    animation: fadeIn 0.4s ease-out;
+  }
+  .hidden { display: none !important; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── INTRO SCREEN ── */
+  #intro {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: #060613;
+  }
+  #intro.fade-out {
+    animation: introFadeOut 0.6s ease-in forwards;
+  }
+  @keyframes introFadeOut {
+    to { opacity: 0; pointer-events: none; }
+  }
+
+  #asteroid-stage {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .asteroid {
+    position: absolute;
+    width: 160px; height: 160px;
+    image-rendering: auto;
+    pointer-events: none;
+  }
+  .asteroid img { width: 100%; height: 100%; object-fit: contain; }
+
+  .asteroid.left {
+    animation: asteroidCrashRight 1.5s cubic-bezier(0.32, 0.05, 0.35, 1) forwards;
+  }
+  .asteroid.right {
+    animation: asteroidCrashLeft 1.5s cubic-bezier(0.32, 0.05, 0.35, 1) forwards;
+  }
+  .asteroid.right img { transform: scaleX(-1); }
+
+  @keyframes asteroidCrashRight {
+    0%   { transform: translateX(-50vw); }
+    68%  { transform: translateX(0); }
+    75%  { transform: translateX(4px); }
+    82%  { transform: translateX(-2px); }
+    88%  { transform: translateX(1px); }
+    100% { transform: translateX(0); }
+  }
+  @keyframes asteroidCrashLeft {
+    0%   { transform: translateX(50vw) scaleX(-1); }
+    68%  { transform: translateX(0) scaleX(-1); }
+    75%  { transform: translateX(-4px) scaleX(-1); }
+    82%  { transform: translateX(2px) scaleX(-1); }
+    88%  { transform: translateX(-1px) scaleX(-1); }
+    100% { transform: translateX(0) scaleX(-1); }
+  }
+
+  /* ── explosion particles ── */
+  #explosion-layer {
+    position: absolute; inset: 0; pointer-events: none; z-index: 6;
+  }
+  .xplo {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: xploBurst 1s ease-out forwards;
+  }
+  @keyframes xploBurst {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    60%  { opacity: 0.9; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+  .xplo-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid var(--rc);
+    pointer-events: none;
+    animation: xploRing 1s ease-out forwards;
+  }
+  @keyframes xploRing {
+    0%   { width: 10px; height: 10px; transform: translate(-50%, -50%); opacity: 1; }
+    100% { width: 350px; height: 350px; transform: translate(-50%, -50%); opacity: 0; }
+  }
+
+  /* ── play button (intro) ── */
+  #intro-play-btn {
+    position: relative; z-index: 7;
+    padding: 20px 60px;
+    font-size: 1.8rem; font-weight: 800;
+    letter-spacing: 4px;
+    border: 3px solid #ffd740;
+    border-radius: 16px;
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(255,109,0,0.5), rgba(255,82,82,0.4), rgba(224,64,251,0.3));
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255,215,64,0.8);
+    box-shadow: 0 0 40px rgba(255,109,0,0.5), 0 0 80px rgba(255,82,82,0.3), inset 0 0 20px rgba(255,255,255,0.1);
+    opacity: 0; transform: scale(0.3);
+    transition: transform 0.15s ease;
+    animation: playBtnPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation-play-state: paused;
+  }
+  #intro-play-btn.show { animation-play-state: running; }
+  #intro-play-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 60px rgba(255,109,0,0.7), 0 0 100px rgba(255,82,82,0.5), inset 0 0 30px rgba(255,255,255,0.15);
+  }
+  #intro-play-btn:active { transform: scale(0.96); }
+
+  @keyframes playBtnPop {
+    0%   { opacity: 0; transform: scale(0.3); }
+    60%  { opacity: 1; transform: scale(1.1); }
+    80%  { transform: scale(0.94); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  /* ── titles ── */
+  h1 {
+    font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-align: center;
+    background: linear-gradient(135deg, #00e5ff, #e040fb, #ffd740);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+
+  /* ── characters ── */
+  .characters { display: flex; gap: 36px; flex-wrap: wrap; justify-content: center; align-items: flex-end; }
+  .char { display: flex; flex-direction: column; align-items: center; gap: 14px; cursor: pointer; transition: transform 0.25s ease; }
+  .char:hover { transform: scale(1.08); }
+  .char.selected { transform: scale(1.12); }
+
+  .char-sprite {
+    width: 120px; height: 120px; border-radius: 20px; border: 4px solid transparent;
+    overflow: hidden; background: rgba(0,0,0,0.4);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .char-sprite img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .char.selected .char-sprite {
+    border-color: #fff;
+    box-shadow: 0 0 32px var(--glow), 0 0 64px var(--glow);
+    animation: pulseGlow 1.2s ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 24px var(--glow), 0 0 48px var(--glow); }
+    50%      { box-shadow: 0 0 40px var(--glow), 0 0 80px var(--glow); }
+  }
+  .char-name { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
+
+  /* ── buttons ── */
+  button {
+    padding: 14px 40px; font-size: 1.05rem; font-weight: 600; letter-spacing: 0.8px;
+    border: 2px solid rgba(255,255,255,0.25); border-radius: 12px; cursor: pointer;
+    background: rgba(255,255,255,0.06); color: #e0e0ff;
+    backdrop-filter: blur(4px); transition: all 0.25s ease;
+    position: relative; overflow: hidden;
+  }
+  button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.5);
+    box-shadow: 0 0 24px rgba(0,229,255,0.25); transform: translateY(-2px);
+  }
+  button:active:not(:disabled) { transform: translateY(0); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; filter: grayscale(0.6); }
+  button.primary {
+    background: linear-gradient(135deg, rgba(0,229,255,0.3), rgba(224,64,251,0.3));
+    border-color: rgba(0,229,255,0.6); font-size: 1.1rem; padding: 16px 48px;
+  }
+  button.primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(0,229,255,0.45), rgba(224,64,251,0.45));
+    box-shadow: 0 0 36px rgba(0,229,255,0.4);
+  }
+  button.ghost { background: transparent; border-color: rgba(255,255,255,0.15); padding: 10px 28px; font-size: 0.9rem; }
+  button.win-btn {
+    background: linear-gradient(135deg, rgba(0,230,118,0.3), rgba(0,229,255,0.25));
+    border-color: rgba(0,230,118,0.5);
+  }
+
+  /* ── level select ── */
+  .levels { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; }
+  .level-card {
+    width: 150px; height: 170px; border-radius: 20px;
+    border: 2px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; cursor: pointer; transition: all 0.3s ease;
+    backdrop-filter: blur(4px); position: relative; overflow: hidden;
+  }
+  .level-card::before { content: ''; position: absolute; inset: 0; border-radius: 20px; opacity: 0; transition: opacity 0.3s; }
+  .level-card:hover { transform: translateY(-6px); border-color: rgba(255,255,255,0.35); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+  .level-card:hover::before { opacity: 1; }
+  .level-card:nth-child(1)::before { background: radial-gradient(circle at center, rgba(0,229,255,0.15), transparent 70%); }
+  .level-card:nth-child(2)::before { background: radial-gradient(circle at center, rgba(255,109,0,0.15), transparent 70%); }
+  .level-card:nth-child(3)::before { background: radial-gradient(circle at center, rgba(224,64,251,0.15), transparent 70%); }
+  .level-planet { width: 64px; height: 64px; border-radius: 50%; }
+  .level-planet.l1 { background: radial-gradient(circle at 35% 35%, #00e5ff, #006064); box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+  .level-planet.l2 { background: radial-gradient(circle at 35% 35%, #ff6d00, #bf360c); box-shadow: 0 0 20px rgba(255,109,0,0.3); }
+  .level-planet.l3 { background: radial-gradient(circle at 35% 35%, #e040fb, #6a1b9a); box-shadow: 0 0 20px rgba(224,64,251,0.3); }
+  .level-name { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
+  .level-diff { font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ── gameplay ── */
+  #gameplay { width: 100%; height: 100%; position: relative; }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px; pointer-events: none;
+  }
+  #hud > * { pointer-events: auto; }
+  #score-display { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.8px; color: #ffd740; text-shadow: 0 0 12px rgba(255,215,64,0.4); }
+  #timer-display {
+    font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #00e5ff;
+    text-shadow: 0 0 16px rgba(0,229,255,0.5); transition: color 0.4s, text-shadow 0.4s;
+  }
+  #timer-display.urgent { color: #ff5252; text-shadow: 0 0 20px rgba(255,82,82,0.6); animation: timerPulse 0.5s ease-in-out infinite; }
+  @keyframes timerPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  #leave-btn { padding: 8px 22px; font-size: 0.85rem; }
+
+  #game-area { position: absolute; inset: 70px 0 0 0; z-index: 1; overflow: hidden; }
+
+  #player-sprite {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 80px; z-index: 2; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #player-sprite img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  #player-sprite .gun-flash {
+    position: absolute; top: 10%; left: 50%; transform: translate(-50%, -50%);
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle, #fff, #ffd740, transparent);
+    opacity: 0; pointer-events: none;
+  }
+  #player-sprite .gun-flash.active { animation: gunFlash 0.3s ease-out; }
+  @keyframes gunFlash {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+  }
+
+  /* ── targets ── */
+  .target { position: absolute; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; animation: targetAppear 0.3s ease-out; z-index: 1; }
+  @keyframes targetAppear { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .target::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; border: 2px solid rgba(255,215,64,0.5); animation: targetRing 2s linear forwards; }
+  @keyframes targetRing { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+  .target::after { content: '✦'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #fff; text-shadow: 0 0 10px rgba(255,215,64,0.8); pointer-events: none; }
+  .target .core {
+    position: absolute; inset: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffd740, #ff8f00);
+    box-shadow: 0 0 20px rgba(255,215,64,0.6), 0 0 40px rgba(255,143,0,0.3);
+  }
+
+  /* ── laser ── */
+  .laser-beam {
+    position: absolute; height: 3px; transform-origin: left center;
+    pointer-events: none; z-index: 4;
+    animation: laserFire 0.35s ease-out forwards; border-radius: 2px;
+  }
+  @keyframes laserFire {
+    0% { opacity: 0; filter: blur(2px); }
+    15% { opacity: 1; filter: blur(0); }
+    60% { opacity: 0.8; filter: blur(0); }
+    100% { opacity: 0; filter: blur(1px); }
+  }
+
+  /* ── sparkle ── */
+  .sparkle { position: absolute; border-radius: 50%; pointer-events: none; z-index: 2; animation: sparkleBurst 0.7s ease-out forwards; }
+  @keyframes sparkleBurst {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+
+  /* ── result ── */
+  #result-icon { font-size: 80px; animation: resultBounce 0.6s ease-out; }
+  @keyframes resultBounce { 0% { transform: scale(0) rotate(-20deg); } 60% { transform: scale(1.2) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); } }
+  #result-score { font-size: 2.2rem; font-weight: 800; letter-spacing: 1px; color: #ffd740; text-shadow: 0 0 20px rgba(255,215,64,0.5); }
+  .result-buttons { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+
+  /* ── confetti ── */
+  .confetti { position: fixed; z-index: 10; pointer-events: none; animation: confettiFall linear forwards; }
+  @keyframes confettiFall { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 1.5rem; }
+    .characters { gap: 20px; }
+    .char-sprite { width: 90px; height: 90px; }
+    .levels { gap: 16px; }
+    .level-card { width: 120px; height: 140px; }
+    button { padding: 12px 28px; font-size: 0.9rem; }
+    #player-sprite { width: 60px; height: 60px; bottom: 10px; }
+    .asteroid { width: 100px; height: 100px; }
+    #intro-play-btn { padding: 16px 40px; font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="starfield"></canvas>
+
+  <!-- ═══ INTRO SCREEN ═══ -->
+  <div id="intro">
+    <div id="asteroid-stage">
+      <div class="asteroid left"><img src="asteroid.gif" alt=""></div>
+      <div class="asteroid right"><img src="asteroid.gif" alt=""></div>
+    </div>
+    <div id="explosion-layer"></div>
+    <button id="intro-play-btn">PLAY</button>
+  </div>
+
+  <!-- ═══ SCREEN 1: CHARACTER SELECT ═══ -->
+  <div id="character-select" class="screen hidden">
+    <h1>Choose Your Character</h1>
+    <div class="characters" id="char-list">
+      <div class="char" data-char="explorer">
+        <div class="char-sprite" style="--glow:#00e5ff"><img src="explorer.gif" alt="Explorer"></div>
+        <span class="char-name" style="color:#00e5ff">Explorer</span>
+      </div>
+      <div class="char" data-char="scout">
+        <div class="char-sprite" style="--glow:#ff6d00"><img src="astronaut.gif" alt="Scout"></div>
+        <span class="char-name" style="color:#ff6d00">Scout</span>
+      </div>
+      <div class="char" data-char="pilot">
+        <div class="char-sprite" style="--glow:#e040fb"><img src="pilot.gif" alt="Pilot"></div>
+        <span class="char-name" style="color:#e040fb">Pilot</span>
+      </div>
+    </div>
+    <button id="start-btn" class="primary" disabled>Start Game</button>
+  </div>
+
+  <!-- ═══ SCREEN 2: LEVEL SELECT ═══ -->
+  <div id="level-select" class="screen hidden">
+    <h1>Select a Level to Begin</h1>
+    <div class="levels" id="level-list">
+      <div class="level-card" data-level="1"><div class="level-planet l1"></div><span class="level-name">Level 1</span><span class="level-diff">Easy</span></div>
+      <div class="level-card" data-level="2"><div class="level-planet l2"></div><span class="level-name">Level 2</span><span class="level-diff">Medium</span></div>
+      <div class="level-card" data-level="3"><div class="level-planet l3"></div><span class="level-name">Level 3</span><span class="level-diff">Hard</span></div>
+    </div>
+    <button id="back-btn" class="ghost">← Back</button>
+  </div>
+
+  <!-- ═══ SCREEN 3: GAMEPLAY ═══ -->
+  <div id="gameplay" class="screen hidden">
+    <div id="hud">
+      <span id="score-display">Score: 0 / 100</span>
+      <span id="timer-display">30</span>
+      <button id="leave-btn" class="ghost">Leave</button>
+    </div>
+    <div id="game-area">
+      <div id="player-sprite"><img id="player-img" src="" alt="Player"><div id="gun-flash" class="gun-flash"></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 4: WIN / LOSE ═══ -->
+  <div id="result" class="screen hidden">
+    <div id="result-icon"></div><h1 id="result-title"></h1><p id="result-score"></p>
+    <div class="result-buttons">
+      <button id="play-again-btn">Play Again</button>
+      <button id="next-level-btn" class="win-btn hidden">Next Level →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+
+  // ── intro ──
+  const introEl       = $('#intro');
+  const explosionLayer = $('#explosion-layer');
+  const introPlayBtn   = $('#intro-play-btn');
+  let introDone = false;
+
+  function triggerExplosion() {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const colors = ['#ff6d00','#ff8f00','#ff5252','#ffd740','#ffab00','#ff3d00','#fff','#ffcc02'];
+
+    // ring
+    for (let r = 0; r < 3; r++) {
+      const ring = document.createElement('div');
+      ring.className = 'xplo-ring';
+      ring.style.left = cx + 'px';
+      ring.style.top  = cy + 'px';
+      ring.style.setProperty('--rc', colors[Math.floor(Math.random() * colors.length)]);
+      ring.style.animationDelay = (r * 0.08) + 's';
+      ring.style.animationDuration = (0.8 + r * 0.2) + 's';
+      explosionLayer.appendChild(ring);
+      setTimeout(() => ring.remove(), 1200);
+    }
+
+    // particles
+    for (let i = 0; i < 50; i++) {
+      const p = document.createElement('div');
+      p.className = 'xplo';
+      const angle = Math.random() * Math.PI * 2;
+      const dist  = 60 + Math.random() * 200;
+      p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      p.style.left = cx + 'px';
+      p.style.top  = cy + 'px';
+      p.style.width  = (6 + Math.random() * 14) + 'px';
+      p.style.height = p.style.width;
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDelay = (Math.random() * 0.1) + 's';
+      p.style.animationDuration = (0.6 + Math.random() * 0.8) + 's';
+      explosionLayer.appendChild(p);
+      setTimeout(() => p.remove(), 1200);
+    }
+
+    // screen shake
+    introEl.style.transform = 'translate(4px, -2px)';
+    setTimeout(() => { introEl.style.transform = 'translate(-3px, 1px)'; }, 50);
+    setTimeout(() => { introEl.style.transform = 'translate(2px, 0)'; }, 100);
+    setTimeout(() => { introEl.style.transform = ''; }, 150);
+
+    // show play button
+    setTimeout(() => {
+      introPlayBtn.classList.add('show');
+    }, 400);
+  }
+
+  function startIntro() {
+    // asteroids start immediately via CSS animation
+    // trigger explosion at collision time (1.5s * 0.68 ≈ 1.02s)
+    setTimeout(triggerExplosion, 1020);
+  }
+
+  introPlayBtn.addEventListener('click', () => {
+    if (introDone) return;
+    introDone = true;
+    introEl.classList.add('fade-out');
+    setTimeout(() => {
+      introEl.classList.add('hidden');
+      showScreen('character');
+    }, 600);
+  });
+
+  // ── screens ──
+  const screens = {
+    character: $('#character-select'),
+    level:     $('#level-select'),
+    gameplay:  $('#gameplay'),
+    result:    $('#result'),
+  };
+
+  const startBtn    = $('#start-btn');
+  const levelList   = $('#level-list');
+  const backBtn     = $('#back-btn');
+  const leaveBtn    = $('#leave-btn');
+  const gameArea    = $('#game-area');
+  const playerImg   = $('#player-img');
+  const gunFlash    = $('#gun-flash');
+  const scoreDisp   = $('#score-display');
+  const timerDisp   = $('#timer-display');
+  const resultIcon  = $('#result-icon');
+  const resultTitle = $('#result-title');
+  const resultScore = $('#result-score');
+  const playAgain   = $('#play-again-btn');
+  const nextLevel   = $('#next-level-btn');
+  const starCanvas  = $('#starfield');
+  const starCtx     = starCanvas.getContext('2d');
+
+  const charSprites = { explorer: 'explorer.gif', scout: 'astronaut.gif', pilot: 'pilot.gif' };
+
+  let selectedChar  = null;
+  let currentLevel  = 1;
+  let score         = 0;
+  let timeLeft      = 30;
+  let timerInterval = null;
+  let spawnInterval = null;
+  let gameActive    = false;
+  const MAX_SCORE = 100;
+  const GAME_TIME = 30;
+
+  const levelConfig = {
+    1: { name: 'Level 1', spawnMin: 1200, spawnMax: 2000, targetLife: 2200 },
+    2: { name: 'Level 2', spawnMin: 900,  spawnMax: 1600, targetLife: 1800 },
+    3: { name: 'Level 3', spawnMin: 600,  spawnMax: 1200, targetLife: 1400 },
+  };
+
+  // ── starfield ──
+  let stars = [];
+  const STAR_COUNT = 180;
+
+  function resizeCanvas() { starCanvas.width = window.innerWidth; starCanvas.height = window.innerHeight; initStars(); }
+  function initStars() {
+    stars = [];
+    for (let i = 0; i < STAR_COUNT; i++)
+      stars.push({ x: Math.random() * starCanvas.width, y: Math.random() * starCanvas.height, r: Math.random() * 1.8 + 0.4, twinkleSpeed: Math.random() * 0.02 + 0.005, twinkleOffset: Math.random() * Math.PI * 2, hue: Math.random() < 0.15 ? 200 + Math.random() * 40 : 0 });
+  }
+  function drawStars(ts) {
+    starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+    for (const s of stars) {
+      const alpha = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(ts * s.twinkleSpeed + s.twinkleOffset));
+      starCtx.beginPath(); starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      starCtx.fillStyle = s.hue ? `hsla(${s.hue}, 60%, 80%, ${alpha})` : `rgba(255,255,255,${alpha})`;
+      starCtx.fill();
+    }
+  }
+  function starLoop(ts) { drawStars(ts); requestAnimationFrame(starLoop); }
+  resizeCanvas(); starLoop(0);
+  window.addEventListener('resize', resizeCanvas);
+
+  function showScreen(name) {
+    Object.keys(screens).forEach(k => screens[k].classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+    screens[name].style.animation = 'none'; screens[name].offsetHeight; screens[name].style.animation = '';
+  }
+
+  // ── character select ──
+  $('#char-list').addEventListener('click', (e) => {
+    const charEl = e.target.closest('.char');
+    if (!charEl) return;
+    selectedChar = charEl.dataset.char;
+    $$('.char').forEach(c => c.classList.remove('selected'));
+    charEl.classList.add('selected');
+    startBtn.disabled = false;
+  });
+  startBtn.addEventListener('click', () => { if (selectedChar) showScreen('level'); });
+
+  // ── level select ──
+  levelList.addEventListener('click', (e) => {
+    const card = e.target.closest('.level-card');
+    if (!card) return;
+    currentLevel = parseInt(card.dataset.level);
+    startGame();
+  });
+  backBtn.addEventListener('click', () => showScreen('character'));
+
+  // ── gameplay ──
+  function startGame() {
+    score = 0; timeLeft = GAME_TIME; gameActive = true;
+    updateScore(); updateTimer();
+    timerDisp.classList.remove('urgent');
+    showScreen('gameplay'); clearGameArea();
+    playerImg.src = charSprites[selectedChar] || charSprites.explorer;
+    const cfg = levelConfig[currentLevel];
+    scheduleSpawn(cfg);
+    timerInterval = setInterval(() => { timeLeft--; updateTimer(); if (timeLeft <= 10) timerDisp.classList.add('urgent'); if (timeLeft <= 0) endGame(false); }, 1000);
+  }
+
+  function getPlayerCenter() {
+    const pr = $('#player-sprite').getBoundingClientRect();
+    const ar = gameArea.getBoundingClientRect();
+    return { x: pr.left - ar.left + pr.width / 2, y: pr.top - ar.top + pr.height * 0.25 };
+  }
+
+  function scheduleSpawn(cfg) {
+    if (!gameActive) return;
+    spawnInterval = setTimeout(() => { if (!gameActive) return; spawnTarget(cfg); scheduleSpawn(cfg); }, cfg.spawnMin + Math.random() * (cfg.spawnMax - cfg.spawnMin));
+  }
+
+  function spawnTarget(cfg) {
+    const el = document.createElement('div'); el.className = 'target';
+    const ar = gameArea.getBoundingClientRect();
+    const size = 60;
+    el.style.left = (10 + Math.random() * (ar.width - size - 10)) + 'px';
+    el.style.top  = (10 + Math.random() * (ar.height - size - 10)) + 'px';
+    const core = document.createElement('div'); core.className = 'core'; el.appendChild(core);
+    el.addEventListener('click', (e) => { if (!gameActive) return; e.stopPropagation(); hitTarget(el); });
+    gameArea.appendChild(el);
+    setTimeout(() => { if (el.parentNode && gameActive) { el.style.transition = 'opacity 0.3s, transform 0.3s'; el.style.opacity = '0'; el.style.transform = 'scale(0.3)'; setTimeout(() => el.remove(), 300); } }, cfg.targetLife);
+  }
+
+  function fireLaser(fx, fy, tx, ty) {
+    const dx = tx - fx, dy = ty - fy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const beam = document.createElement('div'); beam.className = 'laser-beam';
+    beam.style.left = fx + 'px'; beam.style.top = fy + 'px'; beam.style.width = dist + 'px';
+    beam.style.transform = `rotate(${Math.atan2(dy,dx)*180/Math.PI}deg)`;
+    beam.style.background = 'linear-gradient(90deg, transparent 0%, rgba(255,215,64,0.3) 5%, #ffd740 15%, #fff 40%, #ff8f00 65%, rgba(255,143,0,0.4) 90%, transparent 100%)';
+    beam.style.boxShadow = '0 0 6px #ffd740, 0 0 14px #ff8f00, 0 0 24px rgba(255,100,0,0.4)';
+    gameArea.appendChild(beam);
+    setTimeout(() => beam.remove(), 350);
+    gunFlash.classList.add('active');
+    setTimeout(() => gunFlash.classList.remove('active'), 300);
+  }
+
+  function hitTarget(el) {
+    const tr = el.getBoundingClientRect(), ar = gameArea.getBoundingClientRect();
+    const tx = tr.left - ar.left + tr.width/2, ty = tr.top - ar.top + tr.height/2;
+    const p = getPlayerCenter();
+    fireLaser(p.x, p.y, tx, ty);
+    createSparkles(tx, ty);
+    el.style.transition = 'transform 0.15s ease-out, opacity 0.15s';
+    el.style.transform = 'scale(1.4)'; el.style.opacity = '0';
+    setTimeout(() => el.remove(), 150);
+    score += 10; updateScore();
+    if (score >= MAX_SCORE) endGame(true);
+  }
+
+  function createSparkles(cx, cy) {
+    const colors = ['#ffd740','#ff8f00','#ff5252','#00e5ff','#e040fb','#00e676','#fff'];
+    for (let i = 0; i < 18; i++) {
+      const sp = document.createElement('div'); sp.className = 'sparkle';
+      const a = (Math.PI*2*i)/18 + (Math.random()-0.5)*0.6;
+      const d = 35 + Math.random()*55;
+      sp.style.setProperty('--dx', Math.cos(a)*d+'px'); sp.style.setProperty('--dy', Math.sin(a)*d+'px');
+      sp.style.left = cx+'px'; sp.style.top = cy+'px';
+      sp.style.background = colors[Math.floor(Math.random()*colors.length)];
+      sp.style.width = sp.style.height = (4+Math.random()*7)+'px';
+      gameArea.appendChild(sp); setTimeout(() => sp.remove(), 700);
+    }
+  }
+
+  function clearGameArea() {
+    while (gameArea.lastChild) { if (gameArea.lastChild.id === 'player-sprite') break; gameArea.removeChild(gameArea.lastChild); }
+  }
+  function updateScore() { scoreDisp.textContent = `Score: ${score} / ${MAX_SCORE}`; }
+  function updateTimer() { timerDisp.textContent = timeLeft; }
+
+  function stopGame() { gameActive = false; clearInterval(timerInterval); clearTimeout(spawnInterval); timerInterval = null; spawnInterval = null; }
+
+  leaveBtn.addEventListener('click', () => { stopGame(); clearGameArea(); showScreen('level'); });
+
+  // ── result ──
+  function endGame(won) {
+    stopGame(); showScreen('result'); nextLevel.classList.add('hidden');
+    if (won) {
+      resultIcon.textContent = '🏆'; resultTitle.textContent = 'Level Complete!';
+      resultTitle.style.background = 'linear-gradient(135deg, #00e676, #00e5ff)';
+      resultTitle.style.webkitBackgroundClip = 'text'; resultTitle.style.webkitTextFillColor = 'transparent'; resultTitle.style.backgroundClip = 'text';
+      resultScore.textContent = `Score: ${score} / ${MAX_SCORE}`;
+      spawnConfetti();
+      if (currentLevel < 3) nextLevel.classList.remove('hidden');
+    } else {
+      resultIcon.textContent = '💫'; resultTitle.textContent = 'Out of Time — Try Again';
+      resultTitle.style.background = 'linear-gradient(135deg, #ff5252, #ff8f00)';
+      resultTitle.style.webkitBackgroundClip = 'text'; resultTitle.style.webkitTextFillColor = 'transparent'; resultTitle.style.backgroundClip = 'text';
+      resultScore.textContent = `Score: ${score} / ${MAX_SCORE}`;
+    }
+  }
+
+  function spawnConfetti() {
+    const colors = ['#00e5ff','#e040fb','#ffd740','#00e676','#ff5252','#ff6d00','#fff'];
+    for (let i = 0; i < 60; i++) setTimeout(() => {
+      const c = document.createElement('div'); c.className = 'confetti';
+      c.style.left = Math.random()*100+'%'; c.style.background = colors[Math.floor(Math.random()*colors.length)];
+      c.style.width = (6+Math.random()*10)+'px'; c.style.height = (6+Math.random()*10)+'px';
+      c.style.borderRadius = Math.random()>0.5?'50%':'2px';
+      c.style.animationDuration = (2+Math.random()*3)+'s';
+      document.body.appendChild(c); setTimeout(() => c.remove(), 4000);
+    }, i*30);
+  }
+
+  playAgain.addEventListener('click', () => { clearGameArea(); $$('.confetti').forEach(c => c.remove()); startGame(); });
+  nextLevel.addEventListener('click', () => { clearGameArea(); $$('.confetti').forEach(c => c.remove()); currentLevel++; startGame(); });
+
+  // ── boot ──
+  startIntro();
+})();
+</script>
+</body>
+</html>
