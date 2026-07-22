@@ -321,6 +321,7 @@
 </head>
 <body>
 
+<audio id="bg-music" src="Neon Orbit Run.mp3" preload="auto" loop></audio>
 <div id="app">
   <canvas id="starfield"></canvas>
 
@@ -458,6 +459,7 @@
   introPlayBtn.addEventListener('click', () => {
     if (introDone) return;
     introDone = true;
+    bgMusic.play().catch(() => {});
     introEl.classList.add('fade-out');
     setTimeout(() => {
       introEl.classList.add('hidden');
@@ -489,6 +491,7 @@
   const nextLevel   = $('#next-level-btn');
   const starCanvas  = $('#starfield');
   const starCtx     = starCanvas.getContext('2d');
+  const bgMusic     = $('#bg-music');
 
   const charSprites = { explorer: 'explorer.gif', scout: 'astronaut.gif', pilot: 'pilot.gif' };
 
@@ -647,6 +650,8 @@
   function endGame(won) {
     stopGame(); showScreen('result'); nextLevel.classList.add('hidden');
     if (won) {
+      bgMusic.pause();
+      bgMusic.currentTime = 0;
       resultIcon.textContent = '🏆'; resultTitle.textContent = 'Level Complete!';
       resultTitle.style.background = 'linear-gradient(135deg, #00e676, #00e5ff)';
       resultTitle.style.webkitBackgroundClip = 'text'; resultTitle.style.webkitTextFillColor = 'transparent'; resultTitle.style.backgroundClip = 'text';
